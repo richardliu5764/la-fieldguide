@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="theme-color" content="#FBF1E3">
+<title>Field Guide</title>
+<style>
+:root{--paper:#FBF1E3;--ink:#241D12;--muted:#9A8869;--bronze:#BC6B3F;--hair:#ECDDC2}
+@media(prefers-color-scheme:dark){:root{--paper:#1B1916;--ink:#EAE3D6;--muted:#9A917F;--bronze:#C2A878;--hair:#363128}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);min-height:100dvh;display:flex;align-items:center;justify-content:center;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif}
+.box{width:min(320px,86vw);text-align:center}
+h1{font-family:'Iowan Old Style',Georgia,serif;font-weight:500;font-size:24px;margin:0 0 6px}
+p{font-size:13px;color:var(--muted);margin:0 0 22px}
+input{width:100%;font:inherit;font-size:17px;padding:12px 14px;border:1px solid var(--hair);border-radius:10px;background:transparent;color:var(--ink);text-align:center;letter-spacing:.03em;outline:none}
+input:focus{border-color:var(--bronze)}
+button{width:100%;margin-top:12px;font:inherit;font-size:15px;padding:12px;border:0;border-radius:10px;background:var(--bronze);color:#FFF8EE;cursor:pointer}
+.err{color:#A3402C;font-size:12.5px;min-height:18px;margin-top:10px}
+.quiet{font-size:11.5px;color:var(--muted);margin-top:26px}
+.spin{display:none;margin:14px auto 0;width:18px;height:18px;border:2px solid var(--hair);border-top-color:var(--bronze);border-radius:50%;animation:r .8s linear infinite}
+@keyframes r{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>Field Guide</h1>
+  <p>Enter the family passphrase to unlock.</p>
+  <form id="f">
+    <input id="pw" type="password" autocomplete="current-password" placeholder="passphrase" autofocus>
+    <button type="submit">Unlock</button>
+  </form>
+  <div class="spin" id="spin"></div>
+  <div class="err" id="err"></div>
+  <div class="quiet">Works offline after the first unlock.<br>Updates itself when you're online.</div>
+</div>
+<script>
+"use strict";
+var ENC_URL="trip.enc", DB="fg", STORE="keys";
+function idb(){return new Promise(function(res,rej){var r=indexedDB.open(DB,1);
+r.onupgradeneeded=function(){r.result.createObjectStore(STORE)};
+r.onsuccess=function(){res(r.result)};r.onerror=function(){rej(r.error)}})}
+function idbGet(k){return idb().then(function(db){return new Promise(function(res,rej){
+var t=db.transaction(STORE).objectStore(STORE).get(k);
+t.onsuccess=function(){res(t.result)};t.onerror=function(){rej(t.error)}})})}
+function idbSet(k,v){return idb().then(function(db){return new Promise(function(res,rej){
+var t=db.transaction(STORE,"readwrite").objectStore(STORE).put(v,k);
+t.onsuccess=function(){res()};t.onerror=function(){rej(t.error)}})})}
+function b64(s){var bin=atob(s),a=new Uint8Array(bin.length);
+for(var i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a}
+function fetchEnc(){return fetch(ENC_URL,{cache:"no-store"}).then(function(r){
+if(!r.ok)throw new Error("fetch "+r.status);return r.json()})
+.catch(function(){return caches.match(ENC_URL).then(function(r){
+if(!r)throw new Error("offline and nothing cached yet — connect once first");
+return r.json()})})}
+function deriveKey(pass,salt,iter){return crypto.subtle.importKey("raw",
+new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"])
+.then(function(km){return crypto.subtle.deriveKey(
+{name:"PBKDF2",salt:salt,iterations:iter,hash:"SHA-256"},km,
+{name:"AES-GCM",length:256},false,["decrypt"])})}
+function decrypt(key,blob){return crypto.subtle.decrypt(
+{name:"AES-GCM",iv:b64(blob.nonce)},key,b64(blob.ct))
+.then(function(buf){return new TextDecoder().decode(buf)})}
+function show(html){try{idbSet("encCache",null)}catch(e){}
+document.open();document.write(html);document.close()}
+function unlock(key,blob){return decrypt(key,blob).then(function(html){
+idbSet("key",key);
+try{caches.open("fg-data").then(function(c){c.put(ENC_URL,new Response(JSON.stringify(blob),{headers:{"Content-Type":"application/json"}}))})}catch(e){}
+show(html)})}
+if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js")}
+fetchEnc().then(function(blob){
+idbGet("key").then(function(key){
+if(key){document.getElementById("f").style.display="none";
+document.getElementById("spin").style.display="block";
+unlock(key,blob).catch(function(){
+document.getElementById("f").style.display="";
+document.getElementById("spin").style.display="none";
+document.getElementById("err").textContent="Saved key didn't match the latest guide — enter the passphrase."})}
+});
+document.getElementById("f").addEventListener("submit",function(e){
+e.preventDefault();
+var pw=document.getElementById("pw").value.trim().toLowerCase().replace(/\s+/g,"-");
+document.getElementById("err").textContent="";
+document.getElementById("spin").style.display="block";
+deriveKey(pw,b64(blob.salt),blob.iter).then(function(key){return unlock(key,blob)})
+.catch(function(){document.getElementById("spin").style.display="none";
+document.getElementById("err").textContent="That didn't unlock it — check the passphrase."})});
+}).catch(function(e){document.getElementById("err").textContent=e.message});
+</script>
+</body>
+</html>
