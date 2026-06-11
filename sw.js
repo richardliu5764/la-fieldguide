@@ -1,5 +1,5 @@
 /* Field Guide service worker — cache-first shell, app-driven data refresh. */
-var CACHE = "fg-2a62b1525a";
+var CACHE = "fg-4dfe722e89";
 var ASSETS = ["./", "index.html", "trip.enc", "manifest.webmanifest", "sw.js", "icon-180.png", "icon-512.png"];
 
 self.addEventListener("install", function (e) {
