@@ -2,8 +2,8 @@
    Hashed assets + fonts: cache-first (immutable). index.html, manifest, trip-data.enc:
    network-first with a short timeout, falling back to cache, so a weak signal never
    blocks boot. Cache name is stamped per deploy; old caches die on activate.
-   20260612044748 is substituted by scripts/deploy.sh. */
-const CACHE = "excurse-20260612044748";
+   20260612045445 is substituted by scripts/deploy.sh. */
+const CACHE = "excurse-20260612045445";
 const NET_TIMEOUT = 3500;
 
 self.addEventListener("install", () => self.skipWaiting());
