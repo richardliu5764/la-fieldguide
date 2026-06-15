@@ -3,7 +3,7 @@
    network-first with a short timeout, falling back to cache, so a weak signal never
    blocks boot. Cache name is stamped per deploy; old caches die on activate.
    20260613223754 is substituted by scripts/deploy.sh. */
-const CACHE = "excurse-20260613223754";
+const CACHE = "excurse-20260615180000";
 const NET_TIMEOUT = 3500;
 
 self.addEventListener("install", () => self.skipWaiting());
